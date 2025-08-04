@@ -1,0 +1,10 @@
+services:
+  log-forwarder-agent:
+    build: .
+    container_name: log_forwarder_agent
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./source_logs:/app/source_logs
+      - ./destination_logs:/app/destination_logs
