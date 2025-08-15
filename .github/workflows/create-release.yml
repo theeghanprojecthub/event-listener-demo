@@ -2,6 +2,8 @@ name: Create Release and Build Binary
 
 on:
   push:
+    branches:
+      - "main"
     tags:
       - 'v*'
 
