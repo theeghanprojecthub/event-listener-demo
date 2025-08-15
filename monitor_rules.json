@@ -1,5 +1,5 @@
 {
-  "source_path": "source_logs/systemlogs.log",
+  "source_path": "/var/log/source_logs/systemlogs.log",
   "enabled_events": [
     "CREATE",
     "MODIFY",

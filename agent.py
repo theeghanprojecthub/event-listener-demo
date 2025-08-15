@@ -36,14 +36,12 @@ def forward_new_logs(source_path, destination_path, last_known_size):
             src.seek(last_known_size)
             new_data = src.read()
             if new_data:
-                # Decode to process line by line
                 new_logs_str = new_data.decode("utf-8", errors="ignore")
 
                 for line in new_logs_str.strip().split("\n"):
                     if not line:
-                        continue  # Skip empty lines
+                        continue
 
-                    # Add the agent's signature
                     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
                     enriched_line = f"[FORWARDED by Agent at {timestamp}] {line}\n"
 
@@ -59,6 +57,8 @@ def main():
     """
     The main entry point for the log monitoring and forwarding agent.
     """
+    # When run as a service, the working directory is set in the .service file.
+    # We assume the rule files are in the current working directory.
     monitor_config = load_json_config("monitor_rules.json")
     action_config = load_json_config("action_rules.json")
 

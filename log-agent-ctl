@@ -1,0 +1,119 @@
+#!/bin/bash
+
+set -e
+
+CONFIG_DIR="/etc/log-forwarder-agent"
+MONITOR_RULES_FILE="$CONFIG_DIR/monitor_rules.json"
+ACTION_RULES_FILE="$CONFIG_DIR/action_rules.json"
+SERVICE_NAME="log-agent.service"
+
+check_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "This command requires root privileges. Please use 'sudo'." >&2
+        exit 1
+    fi
+}
+
+check_jq() {
+    if ! command -v jq &> /dev/null; then
+        echo "'jq' is not installed, but it is required for modifying rules." >&2
+        echo "Please install it using your package manager (e.g., 'sudo apt-get install jq')." >&2
+        exit 1
+    fi
+}
+
+restart_service() {
+    echo "Restarting the agent to apply changes..."
+    systemctl restart "$SERVICE_NAME"
+    echo "Service restarted."
+}
+
+show_config() {
+    echo "--- Current Configuration ---"
+    echo ""
+    echo "Monitor Rules ($MONITOR_RULES_FILE):"
+    if [ -f "$MONITOR_RULES_FILE" ]; then
+        jq . "$MONITOR_RULES_FILE"
+    else
+        echo "File not found."
+    fi
+    echo ""
+    echo "Action Rules ($ACTION_RULES_FILE):"
+    if [ -f "$ACTION_RULES_FILE" ]; then
+        jq . "$ACTION_RULES_FILE"
+    else
+        echo "File not found."
+    fi
+    echo "---------------------------"
+}
+
+set_source() {
+    check_root
+    check_jq
+    if [ -z "$1" ]; then
+        echo "Error: You must provide a file path." >&2
+        echo "Usage: sudo log-agent-ctl set-source /path/to/your/logfile.log" >&2
+        exit 1
+    fi
+
+    jq --arg path "$1" '.source_path = $path' "$MONITOR_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$MONITOR_RULES_FILE"
+    echo "Source path updated to: $1"
+    restart_service
+}
+
+set_destination() {
+    check_root
+    check_jq
+    if [ -z "$1" ]; then
+        echo "Error: You must provide a file path." >&2
+        echo "Usage: sudo log-agent-ctl set-destination /path/to/your/destination.log" >&2
+        exit 1
+    fi
+
+    jq --arg path "$1" '.destination_path = $path' "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+    echo "Destination path updated to: $1"
+    restart_service
+}
+
+usage() {
+    echo "log-agent-ctl - Log Forwarding Agent Management Tool"
+    echo ""
+    echo "Usage: log-agent-ctl [command]"
+    echo ""
+    echo "Available Commands:"
+    echo "  help             Shows this help message."
+    echo "  show-config      Displays the current monitoring and action rules."
+    echo ""
+    echo "Configuration Commands (require sudo):"
+    echo "  set-source <path>        Overrides the source file path to monitor."
+    echo "                           Example: sudo log-agent-ctl set-source /var/log/nginx/access.log"
+    echo ""
+    echo "  set-destination <path>   Overrides the destination file path."
+    echo "                           Example: sudo log-agent-ctl set-destination /var/log/forwarded/nginx.log"
+    echo ""
+    echo "Supported Events:"
+    echo "  The agent currently supports monitoring for CREATE, MODIFY, and DELETE events."
+    echo "  This is configured by default and is not user-editable via this tool."
+    echo ""
+    echo "After any configuration change, the agent service will be restarted automatically."
+}
+
+case "$1" in
+    show-config)
+        show_config
+        ;;
+    set-source)
+        set_source "$2"
+        ;;
+    set-destination)
+        set_destination "$2"
+        ;;
+    help|--help|-h|"")
+        usage
+        ;;
+    *)
+        echo "Error: Unknown command '$1'" >&2
+        usage
+        exit 1
+        ;;
+esac
