@@ -50,9 +50,9 @@ This is the most robust method for running the agent 24/7 on a production Linux 
     Execute the following command on your server. You must replace `your-github-username/your-repo-name` with the actual repository path.
 
     ```bash
-    read -sp "Enter your GitHub Personal Access Token: " GITHUB_TOKEN && \
-    curl -sSL -H "Authorization: token $GITHUB_TOKEN" \
-    https://raw.githubusercontent.com/theeghanprojecthub/event-listener-demomain/install.sh | sudo -E bash
+        read -sp "Enter your GitHub Personal Access Token: " GITHUB_TOKEN && \
+        curl -sSL -H "Authorization: token $GITHUB_TOKEN" \
+        https://raw.githubusercontent.com/theeghanprojecthub/event-listener-demo/main/install.sh | sudo -E bash
     ```
 
 2.  **Manage the Agent:**

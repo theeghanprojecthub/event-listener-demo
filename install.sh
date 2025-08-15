@@ -2,7 +2,7 @@
 
 set -e
 
-GITHUB_REPO="your-github-username/your-repo-name"
+GITHUB_REPO="theeghanprojecthub/event-listener-demo"
 INSTALL_DIR="/opt/log-forwarder-agent"
 CONFIG_DIR="/etc/log-forwarder-agent"
 LOG_DIR_SOURCE="/var/log/source_logs"
@@ -18,6 +18,12 @@ echo ">>> Starting Log Forwarding Agent installation..."
 if [ "$(id -u)" -ne 0 ]; then
   echo "This script must be run as root. Please use 'sudo'." >&2
   exit 1
+fi
+
+if ! command -v jq &> /dev/null; then
+    echo "'jq' is not installed, but it is required for this installer." >&2
+    echo "Please install it using your package manager (e.g., 'sudo apt-get update && sudo apt-get install -y jq')." >&2
+    exit 1
 fi
 
 if [ -n "$GITHUB_TOKEN" ]; then
@@ -41,19 +47,24 @@ LATEST_RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
 
 API_RESPONSE=$(curl -s $AUTH_HEADER "$LATEST_RELEASE_URL")
 
-BINARY_URL=$(echo "$API_RESPONSE" | grep "browser_download_url.*$AGENT_BINARY_NAME" | cut -d '"' -f 4)
+get_asset_url() {
+    echo "$API_RESPONSE" | jq -r ".assets[] | select(.name == \"$1\") | .browser_download_url"
+}
+
+BINARY_URL=$(get_asset_url "$AGENT_BINARY_NAME")
 if [ -z "$BINARY_URL" ]; then
-    echo "Could not find the agent binary in the latest GitHub release. Aborting." >&2
+    echo "Could not find the agent binary ('$AGENT_BINARY_NAME') in the latest GitHub release. Aborting." >&2
     exit 1
 fi
 echo "Downloading agent binary..."
-curl -L $AUTH_HEADER -o "$INSTALL_DIR/$AGENT_BINARY_NAME" "$BINARY_URL"
+# The URL for release assets does not require the auth header for downloading
+curl -L -o "$INSTALL_DIR/$AGENT_BINARY_NAME" "$BINARY_URL"
 
-MONITOR_RULES_URL=$(echo "$API_RESPONSE" | grep "browser_download_url.*monitor_rules.json" | cut -d '"' -f 4)
-ACTION_RULES_URL=$(echo "$API_RESPONSE" | grep "browser_download_url.*action_rules.json" | cut -d '"' -f 4)
+MONITOR_RULES_URL=$(get_asset_url "monitor_rules.json")
+ACTION_RULES_URL=$(get_asset_url "action_rules.json")
 echo "Downloading default configuration files..."
-curl -L $AUTH_HEADER -o "$CONFIG_DIR/monitor_rules.json" "$MONITOR_RULES_URL"
-curl -L $AUTH_HEADER -o "$CONFIG_DIR/action_rules.json" "$ACTION_RULES_URL"
+curl -L -o "$CONFIG_DIR/monitor_rules.json" "$MONITOR_RULES_URL"
+curl -L -o "$CONFIG_DIR/action_rules.json" "$ACTION_RULES_URL"
 
 echo "Installing management tool '$CTL_SCRIPT_NAME'..."
 CTL_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/$CTL_SCRIPT_NAME"
