@@ -8,6 +8,11 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+
+    # This section grants the necessary permissions to the job
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,7 +32,6 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         env:
-          # Use the built-in GITHUB_TOKEN. No need for a custom secret.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
