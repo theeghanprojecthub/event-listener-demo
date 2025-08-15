@@ -2,8 +2,6 @@ name: Create Release and Build Binary
 
 on:
   push:
-    branches:
-      - "main"
     tags:
       - 'v*'
 
@@ -29,7 +27,8 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          # Use the built-in GITHUB_TOKEN. No need for a custom secret.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
@@ -39,7 +38,7 @@ jobs:
       - name: Upload Agent Binary
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./dist/log-agent
@@ -49,7 +48,7 @@ jobs:
       - name: Upload Monitor Rules
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./monitor_rules.json
@@ -59,7 +58,7 @@ jobs:
       - name: Upload Action Rules
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./action_rules.json
