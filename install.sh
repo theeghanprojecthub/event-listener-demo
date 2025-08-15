@@ -11,12 +11,18 @@ SERVICE_USER="logagent"
 SERVICE_FILE="/etc/systemd/system/log-agent.service"
 AGENT_BINARY_NAME="log-agent"
 CTL_SCRIPT_NAME="log-agent-ctl"
+AUTH_HEADER=""
 
 echo ">>> Starting Log Forwarding Agent installation..."
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "This script must be run as root. Please use 'sudo'." >&2
   exit 1
+fi
+
+if [ -n "$GITHUB_TOKEN" ]; then
+    echo "GITHUB_TOKEN found. Using authenticated requests for a private repository."
+    AUTH_HEADER="-H \"Authorization: token $GITHUB_TOKEN\""
 fi
 
 echo "Creating system user '$SERVICE_USER'..."
@@ -33,23 +39,25 @@ mkdir -p "$LOG_DIR_DEST"
 echo "Fetching latest release from GitHub..."
 LATEST_RELEASE_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
 
-BINARY_URL=$(curl -s $LATEST_RELEASE_URL | grep "browser_download_url.*$AGENT_BINARY_NAME" | cut -d '"' -f 4)
+API_RESPONSE=$(curl -s $AUTH_HEADER "$LATEST_RELEASE_URL")
+
+BINARY_URL=$(echo "$API_RESPONSE" | grep "browser_download_url.*$AGENT_BINARY_NAME" | cut -d '"' -f 4)
 if [ -z "$BINARY_URL" ]; then
     echo "Could not find the agent binary in the latest GitHub release. Aborting." >&2
     exit 1
 fi
-echo "Downloading agent binary from $BINARY_URL..."
-curl -L -o "$INSTALL_DIR/$AGENT_BINARY_NAME" "$BINARY_URL"
+echo "Downloading agent binary..."
+curl -L $AUTH_HEADER -o "$INSTALL_DIR/$AGENT_BINARY_NAME" "$BINARY_URL"
 
-MONITOR_RULES_URL=$(curl -s $LATEST_RELEASE_URL | grep "browser_download_url.*monitor_rules.json" | cut -d '"' -f 4)
-ACTION_RULES_URL=$(curl -s $LATEST_RELEASE_URL | grep "browser_download_url.*action_rules.json" | cut -d '"' -f 4)
+MONITOR_RULES_URL=$(echo "$API_RESPONSE" | grep "browser_download_url.*monitor_rules.json" | cut -d '"' -f 4)
+ACTION_RULES_URL=$(echo "$API_RESPONSE" | grep "browser_download_url.*action_rules.json" | cut -d '"' -f 4)
 echo "Downloading default configuration files..."
-curl -L -o "$CONFIG_DIR/monitor_rules.json" "$MONITOR_RULES_URL"
-curl -L -o "$CONFIG_DIR/action_rules.json" "$ACTION_RULES_URL"
+curl -L $AUTH_HEADER -o "$CONFIG_DIR/monitor_rules.json" "$MONITOR_RULES_URL"
+curl -L $AUTH_HEADER -o "$CONFIG_DIR/action_rules.json" "$ACTION_RULES_URL"
 
 echo "Installing management tool '$CTL_SCRIPT_NAME'..."
 CTL_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/$CTL_SCRIPT_NAME"
-curl -L -o "/usr/local/bin/$CTL_SCRIPT_NAME" "$CTL_URL"
+curl -sSL $AUTH_HEADER -o "/usr/local/bin/$CTL_SCRIPT_NAME" "$CTL_URL"
 chmod +x "/usr/local/bin/$CTL_SCRIPT_NAME"
 
 echo "Setting permissions..."
