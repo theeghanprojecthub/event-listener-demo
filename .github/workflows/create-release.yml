@@ -25,6 +25,9 @@ jobs:
       - name: Install PyInstaller
         run: pip install pyinstaller
 
+      - name: Install Utilities
+        run: pip install requests
+
       - name: Build the executable
         run: pyinstaller --onefile --name log-agent agent.py
 

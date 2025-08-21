@@ -3,7 +3,8 @@ import time
 import json
 import logging
 import sys
-import datetime
+import socket
+import requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,7 +17,6 @@ logging.basicConfig(
 def load_json_config(filepath):
     """
     Loads a JSON configuration file and returns its content.
-    Exits the program if the file is not found or is invalid.
     """
     try:
         with open(filepath, "r") as f:
@@ -26,56 +26,97 @@ def load_json_config(filepath):
         sys.exit(1)
 
 
-def forward_new_logs(source_path, destination_path, last_known_size):
+def forward_logs(new_data, destination_configs):
     """
-    Reads new data from the source, enriches it with a signature,
-    and appends it to the destination file.
+    Forwards new log data to all configured destinations.
     """
-    try:
-        with open(source_path, "rb") as src, open(destination_path, "ab") as dest:
-            src.seek(last_known_size)
-            new_data = src.read()
-            if new_data:
-                new_logs_str = new_data.decode("utf-8", errors="ignore")
+    for config in destination_configs:
+        dest_type = config.get("type")
 
-                for line in new_logs_str.strip().split("\n"):
-                    if not line:
-                        continue
+        if dest_type == "file":
+            try:
+                with open(config["path"], "ab") as dest:
+                    dest.write(new_data)
+                logging.info(
+                    f"Forwarded {len(new_data)} bytes to file: {config['path']}."
+                )
+            except IOError as e:
+                logging.error(f"File IO error for {config['path']}: {e}")
 
-                    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                    enriched_line = f"[FORWARDED by Agent at {timestamp}] {line}\n"
+        elif dest_type == "syslog":
+            host = config.get("host")
+            port = config.get("port")
+            token = config.get("token")
+            if not all([host, port]):
+                logging.error("Syslog destination requires 'host' and 'port'.")
+                continue
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    for line in new_data.strip().split(b"\n"):
+                        if not line:
+                            continue
 
-                    dest.write(enriched_line.encode("utf-8"))
+                        message = (
+                            f"{token} {line.decode('utf-8')}\n".encode("utf-8")
+                            if token
+                            else line
+                        )
+                        sock.sendto(message, (host, port))
+                logging.info(
+                    f"Forwarded {len(new_data)} bytes to syslog server {host}:{port}."
+                )
+            except socket.error as e:
+                logging.error(f"Socket error sending to syslog {host}:{port}: {e}")
 
-                logging.info(f"Forwarded {len(new_data)} bytes of new log data.")
+        elif dest_type == "http":
+            url = config.get("url")
+            token = config.get("token")
+            if not url:
+                logging.error("HTTP destination requires a 'url'.")
+                continue
+            try:
+                headers = {"Content-Type": "application/octet-stream"}
+                if token:
+                    headers["Authorization"] = f"Bearer {token}"
 
-    except IOError as e:
-        logging.error(f"File IO error during log forwarding: {e}")
+                response = requests.post(
+                    url, data=new_data, headers=headers, timeout=10
+                )
+                response.raise_for_status()
+                logging.info(
+                    f"Forwarded {len(new_data)} bytes to HTTP endpoint: {url}."
+                )
+            except requests.exceptions.RequestException as e:
+                logging.error(f"HTTP request error for {url}: {e}")
+
+        else:
+            logging.error(f"Unknown destination type: '{dest_type}'")
 
 
 def main():
     """
     The main entry point for the log monitoring and forwarding agent.
     """
-    # When run as a service, the working directory is set in the .service file.
-    # We assume the rule files are in the current working directory.
     monitor_config = load_json_config("monitor_rules.json")
     action_config = load_json_config("action_rules.json")
 
     source_path = monitor_config.get("source_path")
     enabled_events = set(monitor_config.get("enabled_events", []))
-    destination_path = action_config.get("destination_path")
+    destination_configs = action_config.get("destinations", [])
 
-    if not all([source_path, destination_path]):
-        logging.error("Source and destination paths must be defined in rule files.")
+    if not all([source_path, destination_configs]):
+        logging.error("Source path and at least one destination must be defined.")
         sys.exit(1)
 
     os.makedirs(os.path.dirname(source_path), exist_ok=True)
-    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+    for config in destination_configs:
+        if config.get("type") == "file":
+            os.makedirs(os.path.dirname(config["path"]), exist_ok=True)
 
     logging.info(f"--- Starting agent ---")
     logging.info(f"Monitoring source file: {source_path}")
-    logging.info(f"Forwarding to destination: {destination_path}")
+    logging.info(f"Forwarding to {len(destination_configs)} destination(s).")
     logging.info(f"Enabled events: {list(enabled_events)}")
 
     last_known_state = {"exists": False, "size": 0}
@@ -103,9 +144,11 @@ def main():
 
                 if current_size > last_known_state["size"]:
                     if "MODIFY" in enabled_events:
-                        forward_new_logs(
-                            source_path, destination_path, last_known_state["size"]
-                        )
+                        with open(source_path, "rb") as src:
+                            src.seek(last_known_state["size"])
+                            new_data = src.read()
+                            if new_data:
+                                forward_logs(new_data, destination_configs)
                     last_known_state["size"] = current_size
 
                 elif current_size < last_known_state["size"]:
@@ -113,7 +156,10 @@ def main():
                         logging.warning(
                             f"Source file '{source_path}' was truncated. Resetting monitor."
                         )
-                        forward_new_logs(source_path, destination_path, 0)
+                        with open(source_path, "rb") as src:
+                            new_data = src.read()
+                            if new_data:
+                                forward_logs(new_data, destination_configs)
                     last_known_state["size"] = current_size
 
     except KeyboardInterrupt:

@@ -52,7 +52,6 @@ set_source() {
     check_jq
     if [ -z "$1" ]; then
         echo "Error: You must provide a file path." >&2
-        echo "Usage: sudo log-agent-ctl set-source /path/to/your/logfile.log" >&2
         exit 1
     fi
 
@@ -61,17 +60,75 @@ set_source() {
     restart_service
 }
 
-set_destination() {
+add_destination_file() {
     check_root
     check_jq
     if [ -z "$1" ]; then
         echo "Error: You must provide a file path." >&2
-        echo "Usage: sudo log-agent-ctl set-destination /path/to/your/destination.log" >&2
         exit 1
     fi
 
-    jq --arg path "$1" '.destination_path = $path' "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-    echo "Destination path updated to: $1"
+    jq --arg path "$1" '.destinations += [{"type": "file", "path": $path}]' "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+    echo "Added FILE destination: $1"
+    restart_service
+}
+
+add_destination_syslog() {
+    check_root
+    check_jq
+    if [ -z "$2" ]; then
+        echo "Error: You must provide a host and port." >&2
+        exit 1
+    fi
+
+    HOST=$1
+    PORT=$2
+    TOKEN=$3
+
+    if [ -n "$TOKEN" ]; then
+        jq --arg host "$HOST" --argjson port "$PORT" --arg token "$TOKEN" \
+           '.destinations += [{"type": "syslog", "host": $host, "port": $port, "protocol": "udp", "token": $token}]' \
+           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+        echo "Added SYSLOG destination: $HOST:$PORT (with token)"
+    else
+        jq --arg host "$HOST" --argjson port "$PORT" \
+           '.destinations += [{"type": "syslog", "host": $host, "port": $port, "protocol": "udp"}]' \
+           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+        echo "Added SYSLOG destination: $HOST:$PORT (no token)"
+    fi
+    restart_service
+}
+
+add_destination_http() {
+    check_root
+    check_jq
+    if [ -z "$1" ]; then
+        echo "Error: You must provide a URL." >&2
+        exit 1
+    fi
+
+    URL=$1
+    TOKEN=$2
+
+    if [ -n "$TOKEN" ]; then
+        jq --arg url "$URL" --arg token "$TOKEN" \
+           '.destinations += [{"type": "http", "url": $url, "token": $token}]' \
+           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+        echo "Added HTTP destination: $URL (with token)"
+    else
+        jq --arg url "$URL" \
+           '.destinations += [{"type": "http", "url": $url}]' \
+           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+        echo "Added HTTP destination: $URL (no token)"
+    fi
+    restart_service
+}
+
+clear_destinations() {
+    check_root
+    check_jq
+    echo '{"destinations": []}' > "$ACTION_RULES_FILE"
+    echo "All destinations have been cleared."
     restart_service
 }
 
@@ -81,21 +138,15 @@ usage() {
     echo "Usage: log-agent-ctl [command]"
     echo ""
     echo "Available Commands:"
-    echo "  help             Shows this help message."
-    echo "  show-config      Displays the current monitoring and action rules."
+    echo "  help                                 Shows this help message."
+    echo "  show-config                          Displays the current monitoring and action rules."
     echo ""
     echo "Configuration Commands (require sudo):"
-    echo "  set-source <path>        Overrides the source file path to monitor."
-    echo "                           Example: sudo log-agent-ctl set-source /var/log/nginx/access.log"
-    echo ""
-    echo "  set-destination <path>   Overrides the destination file path."
-    echo "                           Example: sudo log-agent-ctl set-destination /var/log/forwarded/nginx.log"
-    echo ""
-    echo "Supported Events:"
-    echo "  The agent currently supports monitoring for CREATE, MODIFY, and DELETE events."
-    echo "  This is configured by default and is not user-editable via this tool."
-    echo ""
-    echo "After any configuration change, the agent service will be restarted automatically."
+    echo "  set-source <path>                      Overrides the source file path to monitor."
+    echo "  add-destination-file <path>            Adds a local file destination."
+    echo "  add-destination-syslog <host> <port> [token] Adds a remote syslog server destination (token is optional)."
+    echo "  add-destination-http <url> [token]     Adds a remote HTTP endpoint destination (token is optional)."
+    echo "  clear-destinations                     Removes all configured destinations."
 }
 
 case "$1" in
@@ -105,8 +156,17 @@ case "$1" in
     set-source)
         set_source "$2"
         ;;
-    set-destination)
-        set_destination "$2"
+    add-destination-file)
+        add_destination_file "$2"
+        ;;
+    add-destination-syslog)
+        add_destination_syslog "$2" "$3" "$4"
+        ;;
+    add-destination-http)
+        add_destination_http "$2" "$3"
+        ;;
+    clear-destinations)
+        clear_destinations
         ;;
     help|--help|-h|"")
         usage

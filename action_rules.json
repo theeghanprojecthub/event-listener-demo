@@ -1,3 +1,20 @@
 {
-  "destination_path": "/var/log/destination_logs/destinationlog.log"
+  "destinations": [
+    {
+      "type": "file",
+      "path": "/var/log/destination_logs/destinationlog.log"
+    },
+    {
+      "type": "syslog",
+      "host": "your-syslog-server.com",
+      "port": 514,
+      "protocol": "udp",
+      "token": "your-optional-syslog-token"
+    },
+    {
+      "type": "http",
+      "url": "https://your-http-endpoint.com/logs",
+      "token": "your-optional-http-token"
+    }
+  ]
 }
