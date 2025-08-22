@@ -61,21 +61,81 @@ This is the most robust method for running the agent 24/7 on a production Linux 
         https://raw.githubusercontent.com/theeghanprojecthub/event-listener-demo/main/install.sh | sudo -E bash
         ```
 
-2.  **Manage the Agent:**
-    After installation, you can manage the agent using the new `log-agent-ctl` command.
+   2.  **Manage the Agent:**
+       Congratulations, the installation was successfully! The agent is now running as a background service on your Kali machine.
+       The final output of the installer script tells you everything you need to know. Here are the immediate next steps to take.
+       After installation, you can manage the agent using the new `log-agent-ctl` command.
 
-      * **Get Help:**
-        ```bash
-        log-agent-ctl help
-        ```
-      * **View Current Configuration:**
-        ```bash
-        log-agent-ctl show-config
-        ```
-      * **Add a new destination (e.g., an HTTP endpoint):**
-        ```bash
-        sudo log-agent-ctl add-destination-http https://your-endpoint.com/logs your-secret-token
-        ```
+         * **Get Help:**
+           ```bash
+           log-agent-ctl help
+           ```
+         * **View Current Configuration:**
+           ```bash
+           log-agent-ctl show-config
+           ```
+         * **Add a new destination (e.g., an HTTP endpoint):**
+           ```bash
+           sudo log-agent-ctl add-destination-http https://your-endpoint.com/logs your-secret-token
+           ```
+
+-----
+
+### Next Steps
+
+#### 1\. Verify the Service is Running
+
+First, check the status of the newly installed service to make sure it's active.
+
+```bash
+sudo systemctl status log-agent.service
+```
+
+You should see output that includes a line like `Active: active (running)`.
+
+#### 2\. Configure Your Destinations rules
+
+Right now, the agent is using the default rules. You need to tell it where to send the logs. Use the `log-agent-ctl` tool to add your syslog destinations.
+
+  * **First, clear the default destinations:**
+
+    ```bash
+    sudo log-agent-ctl clear-destinations
+    ```
+
+    * **Next, add your HTTP destination:**
+
+      ```bash
+      sudo log-agent-ctl add-destination-http https://logs.collector.com/v1/logs/bulk token22442223
+      ```
+
+    * **(Optional) Add your Syslog destination:**
+      If you want to send to both, you can also add the syslog endpoint.
+
+      ```bash
+      sudo log-agent-ctl add-destination-syslog syslog.collector.com 514 token22442223
+      ```
+
+#### 3\. Test the Agent
+
+Now you can generate some log data to see if it's being forwarded correctly.
+
+  * **Watch the agent's live logs in one terminal:**
+
+    ```bash
+    sudo journalctl -u log-agent.service -f
+    ```
+
+    * **In a second terminal, create a test log entry:**
+      The agent is watching the `/var/log/source_logs/systemlogs.log` file.
+
+      ```bash
+      echo "This is a test log from my Kali machine - $(date)" | sudo tee -a /var/log/source_logs/systemlogs.log
+      ```
+
+#### 4\. Validate in Destination syslog
+
+Finally, go to your Syslog "Events" or "Logs" dashboard. You should see the test log message appear in real-time.
 
 ### Method 2: Run with Docker
 
