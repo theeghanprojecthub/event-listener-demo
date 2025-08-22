@@ -1,19 +1,19 @@
 # Real-Time Log Forwarding Agent
 
-This project is a robust, policy-based log forwarding agent. It uses a custom Python script to "tail" a source log file in real-time, enrich the new log entries with a signature, and forward them to a destination file.
+This project is a robust, policy-based log forwarding agent designed for maximum flexibility. It uses a custom Python script to "tail" a source log file in real-time and forward new data to multiple destinations simultaneously, including local files, remote syslog servers, and HTTP endpoints.
 
-The agent is designed for maximum flexibility and can be run in multiple ways: as a simple local script, as a portable Docker container, or as a professional, auto-restarting service on a production Linux server.
+The agent can be run in multiple ways: as a simple local script, as a portable Docker container, or as a professional, auto-restarting service on a production Linux server.
 
 -----
 
 ## Features
 
-  * **Real-time Log Tailing:** Continuously monitors a source file and processes new data as it's written.
-  * **Content Enrichment:** Adds a timestamped signature to each forwarded log line for clear traceability.
-  * **Rule-Based Configuration:** Uses separate, simple JSON files to define the source file (`monitor_rules.json`) and the destination file (`action_rules.json`).
+  * **Multi-Destination Forwarding:** Send logs to any combination of local files, remote syslog servers, and HTTP endpoints at the same time.
+  * **Authentication Support:** Natively supports token-based authentication for both syslog (token-in-message) and HTTP (Bearer token) destinations.
+  * **Rule-Based Configuration:** Uses simple JSON files to define the source file (`monitor_rules.json`) and a list of destinations (`action_rules.json`).
   * **Multiple Execution Modes:** Can be run directly with Python, as a local background script, via Docker, or as a robust `systemd` service.
-  * **Automated Releases:** New versions are automatically built and published to GitHub Releases using GitHub Actions.
-  * **Professional Installation:** A one-line installation script (`install.sh`) sets up the agent as a secure, managed service on Linux.
+  * **Automated Releases:** New versions are automatically built into a single binary using PyInstaller and published to GitHub Releases via GitHub Actions.
+  * **Professional Installation:** A one-line installation script (`install.sh`) sets up the agent as a secure, managed `systemd` service on Linux.
   * **CLI Management Tool:** Includes a `log-agent-ctl` utility for easy post-installation management of the service's configuration.
 
 -----
@@ -33,7 +33,7 @@ The agent is designed for maximum flexibility and can be run in multiple ways: a
 ├── log-agent-ctl              # Post-installation management tool
 ├── run_local.sh               # Script to run agent locally in background
 ├── run_monitor.sh             # Script to manage the Docker container
-└── requirements.txt           # Build-time dependencies (PyInstaller)
+└── requirements.txt           # Build-time dependencies (PyInstaller, requests)
 ```
 
 -----
@@ -47,13 +47,19 @@ Choose the method that best fits your needs.
 This is the most robust method for running the agent 24/7 on a production Linux server. It installs the agent as a system service that starts on boot and restarts automatically.
 
 1.  **Run the Installer:**
-    Execute the following command on your server. You must replace `your-github-username/your-repo-name` with the actual repository path.
+    Execute the appropriate command on your server.
 
-    ```bash
+      * **For a public GitHub repository:**
+        ```bash
+        curl -sSL https://raw.githubusercontent.com/your-github-username/your-repo-name/main/install.sh | sudo bash
+        ```
+      * **For a private GitHub repository:**
+        This command will securely prompt you for a GitHub Personal Access Token.
+        ```bash
         read -sp "Enter your GitHub Personal Access Token: " GITHUB_TOKEN && \
         curl -sSL -H "Authorization: token $GITHUB_TOKEN" \
         https://raw.githubusercontent.com/theeghanprojecthub/event-listener-demo/main/install.sh | sudo -E bash
-    ```
+        ```
 
 2.  **Manage the Agent:**
     After installation, you can manage the agent using the new `log-agent-ctl` command.
@@ -66,9 +72,9 @@ This is the most robust method for running the agent 24/7 on a production Linux 
         ```bash
         log-agent-ctl show-config
         ```
-      * **Change the Source Log File:**
+      * **Add a new destination (e.g., an HTTP endpoint):**
         ```bash
-        sudo log-agent-ctl set-source /var/log/syslog
+        sudo log-agent-ctl add-destination-http https://your-endpoint.com/logs your-secret-token
         ```
 
 ### Method 2: Run with Docker
@@ -123,4 +129,8 @@ For debugging and development, you can run the agent directly.
 
 ### Release Process
 
-This repository uses **GitHub Actions** to automate the release process. When a new version tag (e.g., `v1.0.1`) is pushed to the `main` branch, a workflow is triggered. This workflow uses **PyInstaller** to compile the `agent.py` script into a single, dependency-free binary. It then creates a new **GitHub Release** and uploads the compiled binary along with the default `monitor_rules.json` and `action_rules.json` files as release assets. This automated process makes new versions of the agent immediately available for the Linux service installation method.
+This repository uses **GitHub Actions** to automate the release process. When a new version tag (e.g., `v1.0.1`) is pushed, 
+a workflow is triggered. This workflow uses **PyInstaller** to compile the `agent.py` script and its dependencies into a single,
+dependency-free binary. It then creates a new **GitHub Release** and uploads the compiled binary along with the default configuration
+files as release assets. This automated process makes new versions of the agent immediately available for the Linux service installation
+method.
