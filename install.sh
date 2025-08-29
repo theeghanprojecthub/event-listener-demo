@@ -51,13 +51,18 @@ get_asset_url() {
     echo "$API_RESPONSE" | jq -r ".assets[] | select(.name == \"$1\") | .browser_download_url"
 }
 
+VERSION=$(echo "$API_RESPONSE" | jq -r ".tag_name")
+if [ -z "$VERSION" ] || [ "$VERSION" == "null" ]; then
+    echo "Could not determine the latest version from the GitHub release. Aborting." >&2
+    exit 1
+fi
+
 BINARY_URL=$(get_asset_url "$AGENT_BINARY_NAME")
 if [ -z "$BINARY_URL" ]; then
     echo "Could not find the agent binary ('$AGENT_BINARY_NAME') in the latest GitHub release. Aborting." >&2
     exit 1
 fi
-echo "Downloading agent binary..."
-# The URL for release assets does not require the auth header for downloading
+echo "Downloading agent binary version $VERSION..."
 curl -L -o "$INSTALL_DIR/$AGENT_BINARY_NAME" "$BINARY_URL"
 
 MONITOR_RULES_URL=$(get_asset_url "monitor_rules.json")
@@ -103,19 +108,30 @@ systemctl daemon-reload
 systemctl enable log-agent.service
 systemctl start log-agent.service
 
+# Final success message with ASCII art
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}"
+cat << "EOF"
+ __                _            _                    _
+| |              | |          | |                  | |
+| |     ___   ___| | ___   ___| |_ ____      ____ _| |_
+| |    / _ \ / __| |/ _ \ / __| __|_  /    / __ \_  _|
+| |___| (_) | (__| | (_) | (__| |_ / /    |  __/_| |_
+|______\___/ \___|_|\___/ \___|\__/___|_____\___| |___|
+                                     /_____|
+EOF
+echo -e "${NC}"
+echo "✅ Installation Complete!"
 echo ""
-echo "✅ Installation complete!"
+echo -e "   Version: ${CYAN}$VERSION${NC}"
+echo -e "   Status:  ${GREEN}Active (running)${NC}"
 echo ""
-echo "The Log Forwarding Agent is now running."
 echo "--------------------------------------------------"
-echo "A new management tool has been installed: 'log-agent-ctl'"
-echo ""
-echo "Usage:"
-echo "  log-agent-ctl help             - Show available commands and usage."
-echo "  log-agent-ctl show-config      - View the current source and destination files."
-echo "  sudo log-agent-ctl set-source <path> - Change the file to monitor."
-echo ""
-echo "System Service Commands:"
-echo "  sudo systemctl status log-agent.service - Check agent status."
-echo "  sudo journalctl -u log-agent.service -f - View live agent logs."
+echo "   Next Steps:"
+echo "   1. Configure your sources and destinations with 'log-agent-ctl help'"
+echo "   2. View the agent's live logs with 'sudo journalctl -u log-agent.service -f'"
 echo "--------------------------------------------------"
+

@@ -3,9 +3,11 @@
 set -e
 
 CONFIG_DIR="/etc/log-forwarder-agent"
+INSTALL_DIR="/opt/log-forwarder-agent"
 MONITOR_RULES_FILE="$CONFIG_DIR/monitor_rules.json"
 ACTION_RULES_FILE="$CONFIG_DIR/action_rules.json"
 SERVICE_NAME="log-agent.service"
+SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
 
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -44,7 +46,6 @@ add_source() {
     check_jq
     if [ -z "$2" ]; then
         echo "Usage: sudo log-agent-ctl add-source <id> <path> [events]" >&2
-        echo "Example: sudo log-agent-ctl add-source nginx_access /var/log/nginx/access.log MODIFY" >&2
         exit 1
     fi
     ID=$1
@@ -105,22 +106,19 @@ add_destination_http() {
         echo "Usage: sudo log-agent-ctl add-destination-http <id> <url> [token]" >&2
         exit 1
     fi
-
     ID=$1
     URL=$2
     TOKEN=$3
-
     if [ -n "$TOKEN" ]; then
         jq --arg id "$ID" --arg url "$URL" --arg token "$TOKEN" \
            '.destinations += [{"id": $id, "type": "http", "url": $url, "token": $token, "source_ids": []}]' \
            "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added HTTP destination '$ID' (with token)"
     else
         jq --arg id "$ID" --arg url "$URL" \
            '.destinations += [{"id": $id, "type": "http", "url": $url, "source_ids": []}]' \
            "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added HTTP destination '$ID' (no token)"
     fi
+    echo "Added HTTP destination '$ID'."
     restart_service
 }
 
@@ -156,6 +154,34 @@ link_source() {
     restart_service
 }
 
+uninstall() {
+    check_root
+    echo "This will completely remove the Log Forwarding Agent and all its configuration."
+    read -p "Are you sure you want to continue? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Uninstall cancelled."
+        exit 1
+    fi
+
+    echo "Stopping and disabling the service..."
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" || true
+
+    echo "Removing agent files and configuration..."
+    rm -f "$SERVICE_FILE"
+    rm -rf "$INSTALL_DIR"
+    rm -rf "$CONFIG_DIR"
+
+    echo "Reloading systemd daemon..."
+    systemctl daemon-reload
+
+    echo "Removing the log-agent-ctl command..."
+    rm -f "/usr/local/bin/log-agent-ctl"
+
+    echo "✅ Uninstallation complete."
+}
+
 usage() {
     echo "log-agent-ctl - Log Forwarding Agent Management Tool"
     echo ""
@@ -164,9 +190,10 @@ usage() {
     echo "Available Commands:"
     echo "  help                                 Shows this help message."
     echo "  show-config                          Displays the current monitoring and action rules."
+    echo "  uninstall                            Completely removes the agent from the system."
     echo ""
     echo "Configuration Commands (require sudo):"
-    echo "  add-source <id> <path> [events]        Adds a new source file to monitor (events are comma-separated)."
+    echo "  add-source <id> <path> [events]        Adds a new source file to monitor."
     echo "  add-destination-file <id> <path>       Adds a new local file destination."
     echo "  add-destination-syslog <id> <host> <port> [token] Adds a new remote syslog destination."
     echo "  add-destination-http <id> <url> [token]     Adds a new remote HTTP endpoint destination."
@@ -199,6 +226,9 @@ case "$1" in
         ;;
     clear-destinations)
         clear_destinations
+        ;;
+    uninstall)
+        uninstall
         ;;
     help|--help|-h|"")
         usage

@@ -13,7 +13,7 @@ The agent is designed for a variety of use cases and can be run directly with Py
   * **Multiple Protocols:** Natively supports forwarding to local files, remote syslog (UDP with optional token-in-message authentication), and HTTP/S endpoints (with optional Bearer token authentication).
   * **Automated Releases:** New versions are automatically built into a single binary using PyInstaller and published to GitHub Releases via GitHub Actions.
   * **Professional Installation:** A one-line installation script (`install.sh`) sets up the agent as a secure, managed `systemd` service on Linux.
-  * **Powerful CLI Management Tool:** Includes a `log-agent-ctl` utility for easy post-installation management of sources, destinations, and the links between them.
+  * **Powerful CLI Management Tool:** Includes a `log-agent-ctl` utility for easy post-installation management of sources, destinations, and the links between them, including a full uninstall command.
 
 -----
 
@@ -79,8 +79,8 @@ After the installation script finishes, the agent is running with default settin
 
       * **Clear the default rules:** It's good practice to start with a clean slate.
         ```bash
+        sudo log-agent-ctl clear-sources
         sudo log-agent-ctl clear-destinations
-        # Note: A command to clear sources can be added if needed.
         ```
       * **Add a source to monitor:** This example adds the main system log.
         ```bash
@@ -114,6 +114,13 @@ After the installation script finishes, the agent is running with default settin
 
 4.  **Validate in Your Destination**
     Finally, go to your remote syslog's "Events" or "Logs" dashboard. You should see the test log message appear in real-time, confirming the entire pipeline is working.
+
+5.  **Uninstalling the Agent**
+    If you need to completely remove the agent and all its configurations, use the built-in uninstall command.
+
+    ```bash
+    sudo log-agent-ctl uninstall
+    ```
 
 ### Method 2: Run with Docker
 
