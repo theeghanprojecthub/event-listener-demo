@@ -9,7 +9,7 @@ The agent is designed for a variety of use cases and can be run directly with Py
 ## Features
 
   * **Multi-Source & Multi-Destination:** Monitor multiple log files at once and route them to any combination of destinations.
-  * **Advanced Log Routing:** Configure specific sources to go to specific destinations (e.g., security logs go to an HTTP alert endpoint, while application logs go to a central syslog server).
+  * **Advanced Log Routing:** Configure specific sources to go to specific destinations (example: security logs go to an HTTP alert endpoint, while application logs go to a central syslog server).
   * **Multiple Protocols:** Natively supports forwarding to local files, remote syslog (UDP with optional token-in-message authentication), and HTTP/S endpoints (with optional Bearer token authentication).
   * **Automated Releases:** New versions are automatically built into a single binary using PyInstaller and published to GitHub Releases via GitHub Actions.
   * **Professional Installation:** A one-line installation script (`install.sh`) sets up the agent as a secure, managed `systemd` service on Linux.
@@ -174,4 +174,4 @@ For debugging and development, you can run the agent directly.
 
 ### Release Process
 
-This repository uses **GitHub Actions** to automate the release process. When a new version tag (e.g., `v1.0.1`) is pushed, a workflow is triggered. This workflow uses **PyInstaller** to compile the `agent.py` script and its dependencies into a single, dependency-free binary. It then creates a new **GitHub Release** and uploads the compiled binary along with the default configuration files as release assets. This automated process makes new versions of the agent immediately available for the Linux service installation method.
+This repository uses **GitHub Actions** to automate the release process. When a new version tag (example: `v1.0.1`) is pushed, a workflow is triggered. This workflow uses **PyInstaller** to compile the `agent.py` script and its dependencies into a single, dependency-free binary. It then creates a new **GitHub Release** and uploads the compiled binary along with the default configuration files as release assets. This automated process makes new versions of the agent immediately available for the Linux service installation method.
