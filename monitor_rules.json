@@ -1,8 +1,19 @@
 {
-  "source_path": "/var/log/source_logs/systemlogs.log",
-  "enabled_events": [
-    "CREATE",
-    "MODIFY",
-    "DELETE"
+  "sources": [
+    {
+      "id": "nginx_access",
+      "path": "/var/log/nginx/access.log",
+      "enabled_events": ["MODIFY"]
+    },
+    {
+      "id": "secure_logs",
+      "path": "/var/log/secure",
+      "enabled_events": ["CREATE", "MODIFY", "DELETE"]
+    },
+    {
+      "id": "app_debug",
+      "path": "/var/log/my-app/debug.log",
+      "enabled_events": ["MODIFY"]
+    }
   ]
 }

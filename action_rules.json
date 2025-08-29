@@ -1,20 +1,24 @@
 {
   "destinations": [
     {
-      "type": "file",
-      "path": "/var/log/destination_logs/destinationlog.log"
-    },
-    {
+      "id": "central_syslog_archive",
       "type": "syslog",
-      "host": "your-syslog-server.com",
+      "host": "logs.mycompany.com",
       "port": 514,
-      "protocol": "udp",
-      "token": "your-optional-syslog-token"
+      "source_ids": ["*"]
     },
     {
+      "id": "security_alerts_http",
       "type": "http",
-      "url": "https://your-http-endpoint.com/logs",
-      "token": "your-optional-http-token"
+      "url": "https://alerts.mycompany.com/ingest",
+      "token": "secret-security-token",
+      "source_ids": ["secure_logs"]
+    },
+    {
+      "id": "local_debug_file",
+      "type": "file",
+      "path": "/var/log/destination_logs/debug.log",
+      "source_ids": ["app_debug", "nginx_access"]
     }
   ]
 }

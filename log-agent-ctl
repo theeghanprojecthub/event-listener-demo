@@ -32,103 +32,85 @@ show_config() {
     echo "--- Current Configuration ---"
     echo ""
     echo "Monitor Rules ($MONITOR_RULES_FILE):"
-    if [ -f "$MONITOR_RULES_FILE" ]; then
-        jq . "$MONITOR_RULES_FILE"
-    else
-        echo "File not found."
-    fi
+    jq . "$MONITOR_RULES_FILE"
     echo ""
     echo "Action Rules ($ACTION_RULES_FILE):"
-    if [ -f "$ACTION_RULES_FILE" ]; then
-        jq . "$ACTION_RULES_FILE"
-    else
-        echo "File not found."
-    fi
+    jq . "$ACTION_RULES_FILE"
     echo "---------------------------"
 }
 
-set_source() {
+add_source() {
     check_root
     check_jq
-    if [ -z "$1" ]; then
-        echo "Error: You must provide a file path." >&2
+    if [ -z "$2" ]; then
+        echo "Usage: sudo log-agent-ctl add-source <id> <path> [events]" >&2
+        echo "Example: sudo log-agent-ctl add-source nginx_access /var/log/nginx/access.log MODIFY" >&2
         exit 1
     fi
+    ID=$1
+    PATH_VAL=$2
+    EVENTS=${3:-"CREATE,MODIFY,DELETE"} # Default events
 
-    jq --arg path "$1" '.source_path = $path' "$MONITOR_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$MONITOR_RULES_FILE"
-    echo "Source path updated to: $1"
+    jq --arg id "$ID" --arg path "$PATH_VAL" --arg events "$EVENTS" \
+       '.sources += [{"id": $id, "path": $path, "enabled_events": ($events | split(","))}]' \
+       "$MONITOR_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$MONITOR_RULES_FILE"
+    echo "Added source '$ID'."
     restart_service
 }
 
 add_destination_file() {
     check_root
     check_jq
-    if [ -z "$1" ]; then
-        echo "Error: You must provide a file path." >&2
+    if [ -z "$2" ]; then
+        echo "Usage: sudo log-agent-ctl add-destination-file <id> <path>" >&2
         exit 1
     fi
-
-    jq --arg path "$1" '.destinations += [{"type": "file", "path": $path}]' "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-    echo "Added FILE destination: $1"
+    ID=$1
+    PATH_VAL=$2
+    jq --arg id "$ID" --arg path "$PATH_VAL" \
+       '.destinations += [{"id": $id, "type": "file", "path": $path, "source_ids": []}]' \
+       "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+    echo "Added FILE destination '$ID'."
     restart_service
 }
 
 add_destination_syslog() {
     check_root
     check_jq
+    if [ -z "$3" ]; then
+        echo "Usage: sudo log-agent-ctl add-destination-syslog <id> <host> <port> [token]" >&2
+        exit 1
+    fi
+    ID=$1
+    HOST=$2
+    PORT=$3
+    TOKEN=$4
+    if [ -n "$TOKEN" ]; then
+        jq --arg id "$ID" --arg host "$HOST" --argjson port "$PORT" --arg token "$TOKEN" \
+           '.destinations += [{"id": $id, "type": "syslog", "host": $host, "port": $port, "protocol": "udp", "token": $token, "source_ids": []}]' \
+           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+    else
+        jq --arg id "$ID" --arg host "$HOST" --argjson port "$PORT" \
+           '.destinations += [{"id": $id, "type": "syslog", "host": $host, "port": $port, "protocol": "udp", "source_ids": []}]' \
+           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+    fi
+    echo "Added SYSLOG destination '$ID'."
+    restart_service
+}
+
+link_source() {
+    check_root
+    check_jq
     if [ -z "$2" ]; then
-        echo "Error: You must provide a host and port." >&2
+        echo "Usage: sudo log-agent-ctl link-source <source_id> <destination_id>" >&2
         exit 1
     fi
-
-    HOST=$1
-    PORT=$2
-    TOKEN=$3
-
-    if [ -n "$TOKEN" ]; then
-        jq --arg host "$HOST" --argjson port "$PORT" --arg token "$TOKEN" \
-           '.destinations += [{"type": "syslog", "host": $host, "port": $port, "protocol": "udp", "token": $token}]' \
-           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added SYSLOG destination: $HOST:$PORT (with token)"
-    else
-        jq --arg host "$HOST" --argjson port "$PORT" \
-           '.destinations += [{"type": "syslog", "host": $host, "port": $port, "protocol": "udp"}]' \
-           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added SYSLOG destination: $HOST:$PORT (no token)"
-    fi
-    restart_service
-}
-
-add_destination_http() {
-    check_root
-    check_jq
-    if [ -z "$1" ]; then
-        echo "Error: You must provide a URL." >&2
-        exit 1
-    fi
-
-    URL=$1
-    TOKEN=$2
-
-    if [ -n "$TOKEN" ]; then
-        jq --arg url "$URL" --arg token "$TOKEN" \
-           '.destinations += [{"type": "http", "url": $url, "token": $token}]' \
-           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added HTTP destination: $URL (with token)"
-    else
-        jq --arg url "$URL" \
-           '.destinations += [{"type": "http", "url": $url}]' \
-           "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added HTTP destination: $URL (no token)"
-    fi
-    restart_service
-}
-
-clear_destinations() {
-    check_root
-    check_jq
-    echo '{"destinations": []}' > "$ACTION_RULES_FILE"
-    echo "All destinations have been cleared."
+    SOURCE_ID=$1
+    DEST_ID=$2
+    jq --arg sid "$SOURCE_ID" --arg did "$DEST_ID" \
+       '(.destinations[] | select(.id == $did) | .source_ids) |= (. + [$sid] | unique)' \
+       "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
+    echo "Linked source '$SOURCE_ID' to destination '$DEST_ID'."
     restart_service
 }
 
@@ -142,31 +124,27 @@ usage() {
     echo "  show-config                          Displays the current monitoring and action rules."
     echo ""
     echo "Configuration Commands (require sudo):"
-    echo "  set-source <path>                      Overrides the source file path to monitor."
-    echo "  add-destination-file <path>            Adds a local file destination."
-    echo "  add-destination-syslog <host> <port> [token] Adds a remote syslog server destination (token is optional)."
-    echo "  add-destination-http <url> [token]     Adds a remote HTTP endpoint destination (token is optional)."
-    echo "  clear-destinations                     Removes all configured destinations."
+    echo "  add-source <id> <path> [events]        Adds a new source file to monitor (events are comma-separated)."
+    echo "  add-destination-file <id> <path>       Adds a new local file destination."
+    echo "  add-destination-syslog <id> <host> <port> [token] Adds a new remote syslog destination."
+    echo "  link-source <source_id> <destination_id> Links a source to a destination."
 }
 
 case "$1" in
     show-config)
         show_config
         ;;
-    set-source)
-        set_source "$2"
+    add-source)
+        add_source "$2" "$3" "$4"
         ;;
     add-destination-file)
-        add_destination_file "$2"
+        add_destination_file "$2" "$3"
         ;;
     add-destination-syslog)
-        add_destination_syslog "$2" "$3" "$4"
+        add_destination_syslog "$2" "$3" "$4" "$5"
         ;;
-    add-destination-http)
-        add_destination_http "$2" "$3"
-        ;;
-    clear-destinations)
-        clear_destinations
+    link-source)
+        link_source "$2" "$3"
         ;;
     help|--help|-h|"")
         usage
