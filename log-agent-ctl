@@ -101,25 +101,34 @@ add_destination_syslog() {
 add_destination_http() {
     check_root
     check_jq
-    if [ -z "$1" ]; then
-        echo "Error: You must provide a URL." >&2
+    if [ -z "$2" ]; then
+        echo "Usage: sudo log-agent-ctl add-destination-http <id> <url> [token]" >&2
         exit 1
     fi
 
-    URL=$1
-    TOKEN=$2
+    ID=$1
+    URL=$2
+    TOKEN=$3
 
     if [ -n "$TOKEN" ]; then
-        jq --arg url "$URL" --arg token "$TOKEN" \
+        jq --arg id "$ID" --arg url "$URL" --arg token "$TOKEN" \
            '.destinations += [{"id": $id, "type": "http", "url": $url, "token": $token, "source_ids": []}]' \
            "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added HTTP destination: $URL (with token)"
+        echo "Added HTTP destination '$ID' (with token)"
     else
-        jq --arg url "$URL" \
+        jq --arg id "$ID" --arg url "$URL" \
            '.destinations += [{"id": $id, "type": "http", "url": $url, "source_ids": []}]' \
            "$ACTION_RULES_FILE" > tmp.$$.json && mv tmp.$$.json "$ACTION_RULES_FILE"
-        echo "Added HTTP destination: $URL (no token)"
+        echo "Added HTTP destination '$ID' (no token)"
     fi
+    restart_service
+}
+
+clear_sources() {
+    check_root
+    check_jq
+    echo '{"sources": []}' > "$MONITOR_RULES_FILE"
+    echo "All sources have been cleared."
     restart_service
 }
 
@@ -162,6 +171,7 @@ usage() {
     echo "  add-destination-syslog <id> <host> <port> [token] Adds a new remote syslog destination."
     echo "  add-destination-http <id> <url> [token]     Adds a new remote HTTP endpoint destination."
     echo "  link-source <source_id> <destination_id> Links a source to a destination."
+    echo "  clear-sources                          Removes all configured sources."
     echo "  clear-destinations                     Removes all configured destinations."
 }
 
@@ -183,6 +193,9 @@ case "$1" in
         ;;
     link-source)
         link_source "$2" "$3"
+        ;;
+    clear-sources)
+        clear_sources
         ;;
     clear-destinations)
         clear_destinations
