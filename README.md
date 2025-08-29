@@ -37,6 +37,89 @@ The agent is designed for a variety of use cases and can be run directly with Py
 
 -----
 
+## Configuration
+
+The agent is controlled by two JSON files: `monitor_rules.json` and `action_rules.json`. These files are typically located in `/etc/log-forwarder-agent/` after a service installation.
+
+### `monitor_rules.json`
+
+This file defines **what** to monitor. It contains a list of `sources`.
+
+**Example:**
+
+```json
+{
+  "sources": [
+    {
+      "id": "nginx_access",
+      "path": "/var/log/nginx/access.log",
+      "enabled_events": ["MODIFY"]
+    },
+    {
+      "id": "secure_logs",
+      "path": "/var/log/secure",
+      "enabled_events": ["CREATE", "MODIFY", "DELETE"]
+    }
+  ]
+}
+```
+
+**Key Explanations:**
+
+  * `sources`: A list containing one or more source objects.
+  * `id`: A unique, user-defined name for this log source. This is used to link sources to destinations.
+  * `path`: The absolute path to the specific log file to monitor. The agent looks for this exact filename.
+  * `enabled_events`: A list of file events to react to.
+      * `MODIFY`: The primary event, triggered when new data is appended to the file.
+      * `CREATE`: Triggered when the file is created.
+      * `DELETE`: Triggered when the file is removed.
+
+### `action_rules.json`
+
+This file defines **where** to send the logs. It contains a list of `destinations`.
+
+**Example:**
+
+```json
+{
+  "destinations": [
+    {
+      "id": "central_syslog_archive",
+      "type": "syslog",
+      "host": "logs.mycompany.com",
+      "port": 514,
+      "source_ids": ["*"]
+    },
+    {
+      "id": "security_alerts_http",
+      "type": "http",
+      "url": "https://alerts.mycompany.com/ingest",
+      "token": "secret-security-token",
+      "source_ids": ["secure_logs"]
+    },
+    {
+      "id": "local_debug_file",
+      "type": "file",
+      "path": "/var/log/destination_logs/debug.log",
+      "source_ids": ["nginx_access"]
+    }
+  ]
+}
+```
+
+**Key Explanations:**
+
+  * `destinations`: A list containing one or more destination objects.
+  * `id`: A unique, user-defined name for this destination.
+  * `type`: The protocol to use. Supported types are `file`, `syslog`, and `http`.
+  * `host`, `port`, `path`, `url`: Configuration specific to the destination `type`.
+  * `token`: (Optional) An authentication token for `syslog` or `http` destinations.
+  * `source_ids`: A list of source `id`s to link to this destination. This is the core of the routing logic.
+      * `["*"]`: A special keyword that means this destination will receive logs from **all** defined sources.
+      * `["secure_logs"]`: This destination will **only** receive logs from the source with the `id` "secure\_logs".
+
+-----
+
 ## How to Run (For Users)
 
 Choose the method that best fits your needs.
